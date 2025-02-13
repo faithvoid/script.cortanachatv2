@@ -93,11 +93,16 @@ def fetch_conversations(session):
         response.raise_for_status()
         conversations = response.json().get('convos', [])
         
+        # Collect all unique DIDs to fetch in bulk
+        dids = {participant['did'] for convo in conversations for participant in convo.get('members', []) if 'did' in participant}
+        profiles = {did: fetch_profile(session, did) for did in dids}
+        
+        # Assign resolved handles to conversations
         for convo in conversations:
             participants = convo.get('members', [])
             for participant in participants:
-                if 'handle' not in participant and 'did' in participant:
-                    participant['handle'] = fetch_profile(session, participant['did'])
+                if 'did' in participant:
+                    participant['handle'] = profiles.get(participant['did'], 'Unknown')
             convo['user_handle'] = next(
                 (p['handle'] for p in participants if p['handle'] != session['handle']),
                 'Unknown'
