@@ -6,7 +6,7 @@ import time
 import unicodedata
 
 # Script constants
-SCRIPT_NAME = 'xChat'
+SCRIPT_NAME = 'Cortana Chat'
 BASE_URL = 'https://bsky.social/xrpc/'
 CHAT_URL = 'https://api.bsky.chat/xrpc/'
 CHECK_INTERVAL = 5  # Interval in seconds to check for new messages and notifications
@@ -223,7 +223,7 @@ def main():
                 message = notification.get('record', {}).get('text', '')
 
                 notification_text = "{}: {}".format(reason.capitalize(), user_handle, message)
-                xbmc.executebuiltin('Notification("xSky", "{}", 5000, "N/A")'.format(sanitize_text(notification_text)))
+                xbmc.executebuiltin('Notification("Cortana Chat", "{}", 5000, "N/A")'.format(sanitize_text(notification_text)))
 
         xbmc.sleep(CHECK_INTERVAL * 1000)
 
