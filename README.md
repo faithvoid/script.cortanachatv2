@@ -5,10 +5,15 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 ![icon](icon.png)
 
 ## Screenshots:
-![1](screenshots/1.png)
-![2](screenshots/2.png)
-![3](screenshots/3.png)
-![4](screenshots/4.png)
+![Menu](screenshots/mainmenu.png)
+![Conversations](screenshots/conversations.png)
+![Messages](screenshots/messages.png)
+![Invite](screenshots/invite.png)
+![Friends](screenshots/friends.png)
+![Followers](screenshots/followers.png)
+![Following](screenshots/following.png)
+![Notifications](screenshots/notifications.png)
+![Settings](screenshots/settings.png)
 
 ## Install:
 - Before downloading, make sure you're on XBMC 3.6-DEV-r33046 or later, as this most likely requires up to date TLS/SSL libraries!
