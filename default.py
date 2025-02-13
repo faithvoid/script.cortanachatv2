@@ -279,18 +279,20 @@ def display_conversations(session):
 # Display messages in a conversation
 def display_messages(session, convo_id):
     messages = fetch_messages(session, convo_id)
-    items = ['Reply', 'Invite To Game'] + [m.get('sender', {}).get('handle', 'Unknown') + ': ' + m.get('text', '') for m in messages]
+    items = ['Reply', 'Nudge', 'Invite To Game'] + [m.get('sender', {}).get('handle', 'Unknown') + ': ' + m.get('text', '') for m in messages]
     dialog = xbmcgui.Dialog()
     choice = dialog.select('Messages', items)
     
     if choice == -1:
-         display_conversations(session) # User backed out
-    if choice == 0:
+        display_conversations(session)  # User backed out
+    elif choice == 0:
         reply_to_conversation(session, convo_id)
     elif choice == 1:
+        send_nudge(session, convo_id)
+    elif choice == 2:
         invite_to_game(session, convo_id)
-    elif choice > 1:
-        message_text = messages[choice - 2].get('text', '')
+    elif choice > 2:
+        message_text = messages[choice - 3].get('text', '')
         match = re.match(r"(.*) would like to play '(.*)'", message_text)
         if match:
             game_title = match.group(2)
@@ -326,6 +328,22 @@ def reply_to_conversation(session, convo_id):
         except requests.exceptions.RequestException as e:
             xbmcgui.Dialog().ok('xSky', 'Failed to send reply: ' + str(e))
     display_messages(session, convo_id)
+
+# Nudge function
+def send_nudge(session, convo_id):
+    nudge_text = session['handle'] + " has sent you a nudge!"
+    now = datetime.datetime.utcnow().isoformat() + 'Z'
+    message = {'$type': 'chat.bsky.convo.message', 'text': nudge_text, 'createdAt': now}
+    url = CHAT_URL + 'chat.bsky.convo.sendMessage'
+    headers = {'Authorization': 'Bearer ' + session['accessJwt']}
+    data = {'convoId': convo_id, 'message': message}
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        xbmcgui.Dialog().ok('xSky', 'Nudge sent successfully!')
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok('xSky', 'Failed to send nudge: ' + str(e))
 
 # Invite to a game
 def invite_to_game(session, convo_id):
