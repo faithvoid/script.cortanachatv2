@@ -465,6 +465,13 @@ def enable_notifications():
     xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
     return
 
+# Disable notifications
+def disable_notifications():
+    script_path = os.path.join(os.path.dirname(__file__), 'stop_notifier.py')
+    xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
+    return
+
+
 # Main function with direct menu navigation
 def main():
     username, app_password = load_credentials()
