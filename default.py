@@ -34,6 +34,34 @@ def authenticate(username, app_password):
         xbmcgui.Dialog().ok('xSky', 'Authentication failed: ' + str(e))
         return None
 
+# Fetch home feed
+def fetch_home_feed(session, cursor=None):
+    url = BASE_URL + 'app.bsky.feed.getTimeline'
+    headers = {'Authorization': 'Bearer ' + session['accessJwt']}
+    params = {'limit': 25}
+    if cursor:
+        params['cursor'] = cursor
+    
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        feed = data.get('feed', [])
+        next_cursor = data.get('cursor', None)
+        
+        dids = {post['post']['author']['did'] for post in feed if 'post' in post and 'author' in post['post'] and 'did' in post['post']['author']}
+        profiles = fetch_profiles(session, dids)
+        
+        for post in feed:
+            author = post.get('post', {}).get('author', {})
+            if 'did' in author:
+                author['handle'] = profiles.get(author['did'], 'Unknown')
+        
+        return feed, next_cursor
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch home feed: ' + str(e))
+        return [], None
+
 # Fetch user profile to resolve handle
 def fetch_profile(session, did):
     url = BASE_URL + 'app.bsky.actor.getProfile'
@@ -45,6 +73,13 @@ def fetch_profile(session, did):
         return response.json().get('handle', 'Unknown')
     except requests.exceptions.RequestException:
         return 'Unknown'
+
+# Fetch user profiles in bulk
+def fetch_profiles(session, dids):
+    profiles = {}
+    for did in dids:
+        profiles[did] = fetch_profile(session, did)
+    return profiles
 
 # Fetch notifications
 def fetch_notifications(session):
@@ -84,7 +119,7 @@ def fetch_following(session):
         xbmcgui.Dialog().ok('xSky', 'Failed to fetch following: ' + str(e))
         return []
 
-# Fetch conversations
+# Fetch conversations with proper user handles in bulk
 def fetch_conversations(session):
     url = CHAT_URL + 'chat.bsky.convo.listConvos'
     headers = {'Authorization': 'Bearer ' + session['accessJwt']}
@@ -141,16 +176,16 @@ def fetch_messages(session, convo_id):
 def display_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Notifications', 'Chat', 'Friends', 'Settings']
+        options = ['Chat', 'Friends', 'Notifications', 'Settings']
         choice = dialog.select('Cortana Chat', options)
         if choice == -1:
             return  # User backed out
         elif choice == 0:
-            display_notifications(session)
-        elif choice == 1:
             display_conversations(session)
-        elif choice == 2:
+        elif choice == 1:
             display_friends_menu(session)
+        elif choice == 2:
+            display_notifications(session)
         elif choice == 3:
             display_settings_menu(session)
 
@@ -175,7 +210,7 @@ def display_friends_menu(session):
 def display_settings_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Enable Notifications', 'Disable Notifications', 'Follow User', 'Block User']
+        options = ['Enable Notifications', 'Disable Notifications', 'Follow User', 'Block User', 'Install Game']
         choice = dialog.select('Settings', options)
         if choice == -1:
             return  # User backed out
@@ -187,6 +222,31 @@ def display_settings_menu(session):
             follow_user(session)
         elif choice == 3:
             block_user(session)
+        elif choice == 4:
+            install_game()
+
+# Display home feed
+def display_home_feed(session):
+    cursor = None
+    while True:
+        feed, next_cursor = fetch_home_feed(session, cursor)
+        items = [post['post']['author'].get('handle', 'Unknown') + ': ' + post['post']['record'].get('text', 'No content') for post in feed if 'post' in post and 'author' in post['post'] and 'record' in post['post']]
+        
+        if next_cursor:
+            items.append('Next Page')
+        
+        dialog = xbmcgui.Dialog()
+        choice = dialog.select('Home Feed', items)
+        
+        if choice == -1:
+            break  # User backed out
+        elif next_cursor and choice == len(items) - 1:
+            cursor = next_cursor  # Load next page
+        else:
+            selected_post = feed[choice].get('post', {})
+            author_handle = selected_post.get('author', {}).get('handle', 'Unknown')
+            post_text = selected_post.get('record', {}).get('text', 'No content')
+            xbmcgui.Dialog().ok(author_handle, post_text)
 
 # Display notifications
 def display_notifications(session):
@@ -292,7 +352,7 @@ def invite_to_game(session, convo_id):
 
 # Load game paths
 def load_games():
-    games_file = os.path.join(os.path.dirname(__file__), 'games.txt')
+    games_file = xbmc.translatePath('special://home/games.txt')
     games = {}
     if os.path.exists(games_file):
         with open(games_file, 'r') as f:
@@ -310,14 +370,82 @@ def launch_game(game_title):
         xbmc.executebuiltin('XBMC.RunXBE("' + game_path + '")')
         sys.exit()  # Ensures the script exits after launching the game
     else:
-        xbmcgui.Dialog().ok('Error', 'Game not found: ' + game_title)
+        dialog = xbmcgui.Dialog()
+        choice = dialog.yesno('Game Not Found', '' + game_title + ' not found. Would you like to locate it?')
+        if choice:
+            install_game(game_title)
 
-# Launch a game
+# Clean game name by removing bracketed text
+def clean_game_name(folder_name):
+    return re.sub(r"\s*\(.*?\)", "", folder_name).strip()
+
+# Prompt user to browse for XBE file
+def browse_for_xbe():
+    dialog = xbmcgui.Dialog()
+    xbe_path = dialog.browse(1, 'Select default.xbe', 'files', 'default.xbe', False, False)
+    return xbe_path if xbe_path.endswith('default.xbe') else None
+
+# Extract folder name from path
+def get_folder_name_from_path(path):
+    return os.path.basename(os.path.dirname(path))
+
+# Prompt user to confirm or edit the game name
+def get_game_name(default_name):
+    clean_name = clean_game_name(default_name)
+    keyboard = xbmc.Keyboard(clean_name, "Enter Game Name")
+    keyboard.doModal()
+    return keyboard.getText() if keyboard.isConfirmed() else None
+
+# Write game entry to games.txt
+def write_to_games_txt(game_name, xbe_path):
+    games_file = xbmc.translatePath('special://home/games.txt')
+    entry = '"{}", "{}"\n'.format(game_name, xbe_path)
+
+    try:
+        # Ensure the file ends with a newline
+        if os.path.exists(games_file):
+            with open(games_file, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                last_char = f.read(1)
+            if last_char != b"\n":
+                with open(games_file, "ab") as f:
+                    f.write(b"\n")
+
+        # Append new entry
+        with open(games_file, "a") as f:
+            f.write(entry)
+
+    except Exception as e:
+        xbmcgui.Dialog().ok("Error", "Failed to write to games.txt:\n{}".format(str(e)))
+
+# Install a game
+def install_game(game_title=None):
+    xbe_path = browse_for_xbe()
+    if not xbe_path:
+        xbmcgui.Dialog().ok("Error", "No default.xbe selected!")
+        return
+
+    folder_name = get_folder_name_from_path(xbe_path)
+    game_name = get_game_name(game_title if game_title else folder_name)
+
+    if game_name:
+        write_to_games_txt(game_name, xbe_path)
+        
+        # Combine success and launch prompt into one dialog
+        launch_choice = xbmcgui.Dialog().yesno("Game Added", "{} has been installed!".format(game_name), "Would you like to launch it now?")
+
+        if launch_choice:
+            launch_game(game_name)
+    else:
+        xbmcgui.Dialog().ok("Cancelled", "No game name entered.")
+
+# Enable notifications
 def enable_notifications():
     script_path = os.path.join(os.path.dirname(__file__), 'notifier.py')
     xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
+    return
 
-# Main function
+# Main function with direct menu navigation
 def main():
     username, app_password = load_credentials()
     if not username or not app_password:
@@ -328,7 +456,24 @@ def main():
     if not session:
         return
 
-    display_menu(session)
+    # Check for arguments passed from XBMC
+    if len(sys.argv) > 1:
+        option = sys.argv[1]
+        if option == "Chat":
+            display_conversations(session)
+        elif option == "Notifications":
+            display_notifications(session)
+        elif option == "Friends":
+            display_friends_menu(session)
+        elif option == "Activity":
+            display_home_feed(session)
+        elif option == "Settings":
+            display_settings_menu(session)
+
+        else:
+            display_menu(session)
+    else:
+        display_menu(session)
 
 if __name__ == '__main__':
     main()
