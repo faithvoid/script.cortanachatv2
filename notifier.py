@@ -14,6 +14,8 @@ LOGIN_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/login.txt'.
 MESSAGES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/messages.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 HANDLES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/handles.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 NOTIFICATIONS_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/notifications.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # Get the script's directory
+NUDGE_FILE = os.path.join(SCRIPT_DIR, "nudge.mp3")  # Construct full path to nudge.mp3
 
 # Load login credentials
 def load_credentials():
@@ -179,6 +181,7 @@ def main():
     old_message_ids = load_old_message_ids()
     old_notification_ids = load_old_notification_ids()
     user_did = session.get('did')
+
     while True:
         convos = fetch_conversations(session)
         for convo in convos:
@@ -193,9 +196,15 @@ def main():
                     old_message_ids.add(message_id)
                     save_message_id(message_id)
                     user_handle = message.get('sender', {}).get('handle', 'Unknown')
-                    text = message.get('text', 'No text')
-                    xbmc.executebuiltin('Notification("{0}", "{1}", 5000, "")'.format(user_handle, sanitize_text(text)))
-        
+                    text = message.get('text', 'No text').strip().lower()
+
+                    # Check for nudge message
+                    nudge_message = "{} has sent you a nudge!".format(user_handle).lower()
+                    if text == nudge_message:
+                        xbmc.executebuiltin('PlayMedia("{}")'.format(NUDGE_FILE))
+
+                    xbmc.executebuiltin('Notification("{}", "{}", 5000, "")'.format(user_handle, sanitize_text(text)))
+
         notifications = fetch_notifications(session)
         for notification in notifications:
             notification_id = notification.get('cid')
@@ -206,10 +215,10 @@ def main():
                 author = notification.get('author', {})
                 user_handle = author.get('handle', 'Unknown user')
                 message = notification.get('record', {}).get('text', '')
-                
+
                 notification_text = "{}: {}".format(reason.capitalize(), user_handle, message)
                 xbmc.executebuiltin('Notification("xSky", "{}", 5000, "N/A")'.format(sanitize_text(notification_text)))
-        
+
         xbmc.sleep(CHECK_INTERVAL * 1000)
 
 if __name__ == '__main__':
