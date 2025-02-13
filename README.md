@@ -25,10 +25,17 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 - Run the add-on and enjoy!
 
 ## Working
-- TBA, but it IS working!
+- Sending / receiving messages
+- Receiving chat/notification toast pop-ups by selecting "Enable Notifications" in settings
+- Inviting other users to games (and accepting invites from other users)
+- Viewing following/followers sections
+- Multi-user logins via XBMC's account feature
 
 ## Not Working
 - TBA
 
 ## TODO:
-- TBA
+- Add / Unfriend / Block functions
+- Show only "mutual" followers under "Friends"?
+- Maybe feed interactions? But also that's more of what xSky is for
+- Add timestamps to messages
