@@ -16,6 +16,7 @@ HANDLES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/handles.t
 NOTIFICATIONS_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/notifications.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # Get the script's directory
 NUDGE_FILE = os.path.join(SCRIPT_DIR, "nudge.mp3")  # Construct full path to nudge.mp3
+LAST_NUDGE_TIME = 0  
 
 # Load login credentials
 def load_credentials():
@@ -169,6 +170,7 @@ def sanitize_text(text):
 
 # Main service loop
 def main():
+    global LAST_NUDGE_TIME
     username, app_password = load_credentials()
     if not username or not app_password:
         xbmc.log("{}: Please enter your BlueSky username and app password in login.txt.".format(SCRIPT_NAME), xbmc.LOGERROR)
@@ -200,8 +202,12 @@ def main():
 
                     # Check for nudge message
                     nudge_message = "{} has sent you a nudge!".format(user_handle).lower()
+                    current_time = time.time()
+
                     if text == nudge_message:
-                        xbmc.executebuiltin('PlayMedia("{}")'.format(NUDGE_FILE))
+                        if current_time - LAST_NUDGE_TIME >= 30:  # 30-second cooldown
+                            xbmc.executebuiltin('PlayMedia("{}")'.format(NUDGE_FILE))
+                            LAST_NUDGE_TIME = current_time  # Update last nudge time
 
                     xbmc.executebuiltin('Notification("{}", "{}", 5000, "")'.format(user_handle, sanitize_text(text)))
 
