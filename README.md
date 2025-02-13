@@ -15,7 +15,7 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 - Download latest release .zip
 - Extract the .zip file and edit "login.txt" to contain your full username (ie; username.bsky.social or username.custom.domain) and app password (do not use your actual password!)
 - Edit "default.py" and modify "TIMEZONE_OFFSET = -5" to your local timezone relative to UTC (-5 is EST) for accurate timestamps
-- Copy the xChat folder to Q:/scripts/plugins/programs, but copy your login.txt to your user profile (usually under Q:/UserData/profiles/). You can do this for all the profiles on your system to give them all individual social features!
+- Copy the Cortana Chat folder to Q:/scripts, but copy your login.txt to your user profile (usually under Q:/UserData/profiles/). You can do this for all the profiles on your system to give them all individual social features!
 - (Optional) if using a non-Bluesky AT protocol site, you'll have to modify the BASE_URL and CHAT_URL in default.py to point at that site! Support outside of Bluesky is entirely unsupported, but testing & contributing is encouraged!
 - Run the add-on and enjoy!
 
