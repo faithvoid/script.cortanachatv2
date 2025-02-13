@@ -7,16 +7,34 @@ import unicodedata
 
 # Script constants
 SCRIPT_NAME = 'Cortana Chat'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # Get the script's directory
 BASE_URL = 'https://bsky.social/xrpc/'
 CHAT_URL = 'https://api.bsky.chat/xrpc/'
 CHECK_INTERVAL = 5  # Interval in seconds to check for new messages and notifications
 LOGIN_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/login.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 MESSAGES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/messages.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 HANDLES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/handles.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
+PID_FILE = os.path.join(SCRIPT_DIR, "notifier.pid")
 NOTIFICATIONS_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/notifications.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # Get the script's directory
 NUDGE_FILE = os.path.join(SCRIPT_DIR, "nudge.mp3")  # Construct full path to nudge.mp3
-LAST_NUDGE_TIME = 0  
+LAST_NUDGE_TIME = 0
+
+# Create PID file
+def create_pid_file():
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+
+# Check if PID file exists
+def check_pid_file():
+    return os.path.exists(PID_FILE)
+
+# Function to delete the PID file
+def delete_pid():
+    if os.path.exists(PID_FILE):
+        os.remove(PID_FILE)
+        xbmc.log("{}: PID file removed, stopping the notifier.".format(SCRIPT_NAME), xbmc.LOGINFO)
+    else:
+        xbmc.log("{}: PID file not found.".format(SCRIPT_NAME), xbmc.LOGERROR)
 
 # Load login credentials
 def load_credentials():
@@ -168,9 +186,21 @@ def save_notification_id(notification_id):
 def sanitize_text(text):
     return ''.join(char for char in text if ord(char) < 128)
 
-# Main service loop
+# Check sys.argv for "stop" argument
+def check_stop():
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "stop":
+        delete_pid()
+        sys.exit()  # Exit after stopping
+
+# Run the script normally
 def main():
-    global LAST_NUDGE_TIME
+    # First, check if the script was called with "stop"
+    check_stop()
+
+    create_pid_file()  # Create the PID file at the start of the script
+    xbmc.log("{}: Notifier started with PID {}".format(SCRIPT_NAME, os.getpid()), xbmc.LOGINFO)
+
+    # Start your actual logic before checking the PID file
     username, app_password = load_credentials()
     if not username or not app_password:
         xbmc.log("{}: Please enter your BlueSky username and app password in login.txt.".format(SCRIPT_NAME), xbmc.LOGERROR)
@@ -185,6 +215,12 @@ def main():
     user_did = session.get('did')
 
     while True:
+        # Check if the PID file exists, exit if it's removed
+        if not check_pid_file():
+            xbmc.log("{}: Notifier PID file removed, exiting...".format(SCRIPT_NAME), xbmc.LOGINFO)
+            break  # Exit the loop if the PID file is deleted
+
+        # Fetch conversations and messages from BlueSky
         convos = fetch_conversations(session)
         for convo in convos:
             messages = fetch_messages(session, convo.get('id'))
@@ -211,21 +247,26 @@ def main():
 
                     xbmc.executebuiltin('Notification("{}", "{}", 5000, "")'.format(user_handle, sanitize_text(text)))
 
-        notifications = fetch_notifications(session)
-        for notification in notifications:
-            notification_id = notification.get('cid')
-            if notification_id not in old_notification_ids:
-                old_notification_ids.add(notification_id)
-                save_notification_id(notification_id)
-                reason = notification.get('reason', 'No Title')
-                author = notification.get('author', {})
-                user_handle = author.get('handle', 'Unknown user')
-                message = notification.get('record', {}).get('text', '')
+            # Fetch notifications
+            notifications = fetch_notifications(session)
+            for notification in notifications:
+                notification_id = notification.get('cid')
+                if notification_id not in old_notification_ids:
+                    old_notification_ids.add(notification_id)
+                    save_notification_id(notification_id)
+                    reason = notification.get('reason', 'No Title')
+                    author = notification.get('author', {})
+                    user_handle = author.get('handle', 'Unknown user')
+                    message = notification.get('record', {}).get('text', '')
 
-                notification_text = "{}: {}".format(reason.capitalize(), user_handle, message)
-                xbmc.executebuiltin('Notification("Cortana Chat", "{}", 5000, "N/A")'.format(sanitize_text(notification_text)))
+                    notification_text = "{}: {}".format(reason.capitalize(), user_handle, message)
+                    xbmc.executebuiltin('Notification("Cortana Chat", "{}", 5000, "N/A")'.format(sanitize_text(notification_text)))
 
-        xbmc.sleep(CHECK_INTERVAL * 1000)
+            # Sleep for the specified interval before checking again
+            xbmc.sleep(CHECK_INTERVAL * 1000)
 
+        xbmc.log("{}: Notifier stopped.".format(SCRIPT_NAME), xbmc.LOGINFO)
+
+# Run the main function
 if __name__ == '__main__':
     main()
