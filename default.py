@@ -136,7 +136,7 @@ def fetch_messages(session, convo_id):
 def display_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Notifications', 'Chat', 'Friends']
+        options = ['Notifications', 'Chat', 'Friends', 'Settings']
         choice = dialog.select('Cortana Chat', options)
         if choice == -1:
             return  # User backed out
@@ -146,6 +146,8 @@ def display_menu(session):
             display_conversations(session)
         elif choice == 2:
             display_friends_menu(session)
+        elif choice == 3:
+            display_settings_menu(session)
 
 # Display menu
 def display_friends_menu(session):
@@ -159,6 +161,23 @@ def display_friends_menu(session):
             display_followers(session)
         elif choice == 1:
             display_following(session)
+        elif choice == 2:
+            follow_user(session)
+        elif choice == 3:
+            block_user(session)
+
+# Display menu
+def display_settings_menu(session):
+    while True:
+        dialog = xbmcgui.Dialog()
+        options = ['Enable Notifications', 'Disable Notifications', 'Follow User', 'Block User']
+        choice = dialog.select('Settings', options)
+        if choice == -1:
+            return  # User backed out
+        elif choice == 0:
+            enable_notifications()
+        elif choice == 1:
+            disable_notifications()
         elif choice == 2:
             follow_user(session)
         elif choice == 3:
@@ -283,8 +302,8 @@ def launch_game(game_title):
     games = load_games()
     if game_title in games:
         game_path = games[game_title]
-        xbmcgui.Dialog().ok('Launching Game', 'Now launching: ' + game_title)
         xbmc.executebuiltin('XBMC.RunXBE("' + game_path + '")')
+        sys.exit()  # Ensures the script exits after launching the game
     else:
         xbmcgui.Dialog().ok('Error', 'Game not found: ' + game_title)
 
