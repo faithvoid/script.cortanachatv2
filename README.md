@@ -39,3 +39,4 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 - Show only "mutual" followers under "Friends"?
 - Maybe feed interactions? But also that's more of what xSky is for
 - Add timestamps to messages
+- Implement MSN-style "nudge" message
