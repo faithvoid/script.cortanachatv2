@@ -30,6 +30,7 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 - Inviting other users to games (and accepting invites from other users)
 - Viewing following/followers sections
 - Multi-user logins via XBMC's account feature
+- MSN-style nudging!
 
 ## Not Working
 - TBA
@@ -39,4 +40,3 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 - Show only "mutual" followers under "Friends"?
 - Maybe feed interactions? But also that's more of what xSky is for
 - Add timestamps to messages
-- Implement MSN-style "nudge" message
