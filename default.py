@@ -299,12 +299,14 @@ def display_messages(session, convo_id):
 # Display message options
 def display_message_options(session, convo_id, game_title):
     dialog = xbmcgui.Dialog()
-    options = ['Reply', 'Accept Invite']
+    options = ['Reply', 'Accept Invite', 'Decline Invite']
     choice = dialog.select('Message Options', options)
     if choice == 0:
         reply_to_conversation(session, convo_id)
     elif choice == 1:
         launch_game(game_title)
+    elif choice == 2:
+        display_messages(session, convo_id)
 
 # Reply to a conversation and return to message list
 def reply_to_conversation(session, convo_id):
