@@ -31,7 +31,7 @@ def authenticate(username, app_password):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Authentication failed: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Authentication failed: ' + str(e))
         return None
 
 # Fetch home feed
@@ -59,7 +59,7 @@ def fetch_home_feed(session, cursor=None):
         
         return feed, next_cursor
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to fetch home feed: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch home feed: ' + str(e))
         return [], None
 
 # Fetch user profile to resolve handle
@@ -90,7 +90,7 @@ def fetch_notifications(session):
         response.raise_for_status()
         return response.json().get('notifications', [])
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to fetch notifications: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch notifications: ' + str(e))
         return []
 
 # Fetch followers
@@ -103,7 +103,7 @@ def fetch_followers(session):
         response.raise_for_status()
         return response.json().get('followers', [])
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to fetch followers: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch followers: ' + str(e))
         return []
 
 # Fetch following
@@ -116,7 +116,7 @@ def fetch_following(session):
         response.raise_for_status()
         return response.json().get('follows', [])
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to fetch following: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch following: ' + str(e))
         return []
 
 # Fetch conversations with proper user handles in bulk
@@ -145,7 +145,7 @@ def fetch_conversations(session):
         
         return conversations
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to fetch conversations: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch conversations: ' + str(e))
         return []
 
 # Fetch messages for a conversation
@@ -169,7 +169,7 @@ def fetch_messages(session, convo_id):
         
         return messages
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to fetch messages: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch messages: ' + str(e))
         return []
 
 # Display menu
@@ -324,9 +324,9 @@ def reply_to_conversation(session, convo_id):
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            xbmcgui.Dialog().ok('xSky', 'Reply sent successfully!')
+            xbmcgui.Dialog().ok('Cortana Chat', 'Reply sent successfully!')
         except requests.exceptions.RequestException as e:
-            xbmcgui.Dialog().ok('xSky', 'Failed to send reply: ' + str(e))
+            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send reply: ' + str(e))
     display_messages(session, convo_id)
 
 # Nudge function
@@ -341,15 +341,15 @@ def send_nudge(session, convo_id):
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
-        xbmcgui.Dialog().ok('xSky', 'Nudge sent successfully!')
+        xbmcgui.Dialog().ok('Cortana Chat', 'Nudge sent successfully!')
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('xSky', 'Failed to send nudge: ' + str(e))
+        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send nudge: ' + str(e))
 
 # Invite to a game
 def invite_to_game(session, convo_id):
     games = load_games()
     if not games:
-        xbmcgui.Dialog().ok('xSky', 'No games found in games.txt.')
+        xbmcgui.Dialog().ok('Cortana Chat', 'No games found in games.txt.')
         return
     
     dialog = xbmcgui.Dialog()
@@ -365,10 +365,10 @@ def invite_to_game(session, convo_id):
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            xbmcgui.Dialog().ok('xSky', 'Invite sent successfully!')
+            xbmcgui.Dialog().ok('Cortana Chat', 'Invite sent successfully!')
 	    return
         except requests.exceptions.RequestException as e:
-            xbmcgui.Dialog().ok('xSky', 'Failed to send invite: ' + str(e))
+            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send invite: ' + str(e))
 
 # Load game paths
 def load_games():
@@ -469,7 +469,7 @@ def enable_notifications():
 def main():
     username, app_password = load_credentials()
     if not username or not app_password:
-        xbmcgui.Dialog().ok('xSky', 'Enter your BlueSky username and app password in login.txt.')
+        xbmcgui.Dialog().ok('Cortana Chat', 'Enter your BlueSky username and app password in login.txt.')
         return
 
     session = authenticate(username, app_password)
