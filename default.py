@@ -137,7 +137,7 @@ def display_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
         options = ['Notifications', 'Chat', 'Friends']
-        choice = dialog.select('Select an option', options)
+        choice = dialog.select('Cortana Chat', options)
         if choice == -1:
             return  # User backed out
         elif choice == 0:
@@ -151,14 +151,18 @@ def display_menu(session):
 def display_friends_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Followers', 'Following']
-        choice = dialog.select('Select an option', options)
+        options = ['Followers', 'Following', 'Follow User', 'Block User']
+        choice = dialog.select('Friends', options)
         if choice == -1:
             return  # User backed out
         elif choice == 0:
             display_followers(session)
         elif choice == 1:
             display_following(session)
+        elif choice == 2:
+            follow_user(session)
+        elif choice == 3:
+            block_user(session)
 
 # Display notifications
 def display_notifications(session):
@@ -304,5 +308,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
