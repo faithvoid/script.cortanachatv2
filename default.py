@@ -432,12 +432,26 @@ def display_settings_menu(session):
         elif choice == 4:
             install_game()
 
+# Display game invite options in home feed
+def display_game_invite_options(game_title):
+    options = ["Accept Invite", "Decline Invite"]
+    dialog = xbmcgui.Dialog()
+    invite_choice = dialog.select("Game Invite", options)
+    
+    if invite_choice == 0:  # Accept Invite
+        if game_title in load_games():
+            launch_game(game_title)
+        else:
+            xbmcgui.Dialog().ok("Game Not Found", "{} is not installed.".format(game_title))
+    elif invite_choice == 1:  # Decline Invite
+        return
+
 # Display home feed
 def display_home_feed(session):
     cursor = None
     while True:
         feed, next_cursor = fetch_home_feed(session, cursor)
-        items = ["Post", "Post Media", "Game Invite"]  # New option added
+        items = ["Post", "Post Media", "Game Invite"]
         items += [post['post']['author'].get('handle', 'Unknown') + ': ' + post['post']['record'].get('text', 'No content') 
                   for post in feed if 'post' in post and 'author' in post['post'] and 'record' in post['post']]
 
@@ -454,14 +468,20 @@ def display_home_feed(session):
         elif choice == 1:
             create_post_media(session)
         elif choice == 2:
-            create_post_invite(session)  # Call function to create game invite
+            create_post_invite(session)
         elif next_cursor and choice == len(items) - 1:
             cursor = next_cursor
         else:
-            selected_post = feed[choice - 3].get("post", {})  # Adjust index
+            selected_post = feed[choice - 3].get("post", {})
             author_handle = selected_post.get("author", {}).get("handle", "Unknown")
             post_text = selected_post.get("record", {}).get("text", "No content")
-            xbmcgui.Dialog().ok(author_handle, post_text)
+            
+            match = re.match(r"(.*) would like to play '(.*)'", post_text)
+            if match:
+                game_title = match.group(2)
+                display_game_invite_options(game_title)
+            else:
+                xbmcgui.Dialog().ok(author_handle, post_text)
 
 # Fetch post content by URI
 def fetch_post_content(session, uri):
