@@ -119,6 +119,32 @@ def fetch_following(session):
         xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch following: ' + str(e))
         return []
 
+def fetch_mutuals(session):
+    followers = {f.get('did') for f in fetch_followers(session)}
+    following = {f.get('did') for f in fetch_following(session)}
+
+    mutual_dids = followers.intersection(following)
+
+    # Resolve handles for mutuals
+    mutuals = []
+    for did in mutual_dids:
+        handle = fetch_profile(session, did)
+        mutuals.append(handle)
+
+    return mutuals
+
+def fetch_blocked_users(session):
+    url = BASE_URL + "app.bsky.graph.getBlocks"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json().get("blocks", [])
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to fetch blocked users: " + str(e))
+        return []
+
 # Fetch conversations with proper user handles in bulk
 def fetch_conversations(session):
     url = CHAT_URL + 'chat.bsky.convo.listConvos'
@@ -400,7 +426,7 @@ def display_menu(session):
 def display_friends_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Followers', 'Following', 'Follow User', 'Block User']
+        options = ['Followers', 'Following', 'Mutuals', 'Follow User', 'Block User']
         choice = dialog.select('Friends', options)
         if choice == -1:
             return  # User backed out
@@ -409,9 +435,168 @@ def display_friends_menu(session):
         elif choice == 1:
             display_following(session)
         elif choice == 2:
-            follow_user(session)
+            display_mutuals(session)
         elif choice == 3:
+            follow_user(session)
+        elif choice == 4:
             block_user(session)
+
+def get_did_from_handle(session, handle):
+    """Fetches the DID of a user from their handle."""
+    url = BASE_URL + "app.bsky.actor.getProfile?actor=" + handle
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json().get("did")  # Extract DID
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Could not find DID for @" + handle + ": " + str(e))
+        return None
+
+def follow_user(session, handle=None):
+    if handle is None:  # If no handle is given, ask for one
+        keyboard = xbmc.Keyboard("", "Enter the handle of the user to follow")
+        keyboard.doModal()
+        if keyboard.isConfirmed():
+            handle = keyboard.getText().strip()
+    
+    if not handle:
+        xbmcgui.Dialog().ok("Error", "No handle entered.")
+        return
+
+    did = get_did_from_handle(session, handle)
+    if not did:
+        return  # Stop if DID lookup fails
+
+    url = BASE_URL + "com.atproto.repo.createRecord"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    data = {
+        "repo": session["did"],  # Your own DID (not the target user)
+        "collection": "app.bsky.graph.follow",
+        "record": {
+            "$type": "app.bsky.graph.follow",
+            "subject": did,  # Target user's DID
+            "createdAt": datetime.datetime.utcnow().isoformat() + "Z"
+        }
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        xbmcgui.Dialog().ok("Success", "You are now following @" + handle)
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to follow @" + handle + ": " + str(e))
+
+def get_follow_record_uri(session, did):
+    url = BASE_URL + "com.atproto.repo.listRecords"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    params = {
+        "repo": session["did"],  # Your own repository
+        "collection": "app.bsky.graph.follow",
+        "limit": 100  # Fetch up to 100 follow records
+    }
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        records = response.json().get("records", [])
+
+        for record in records:
+            if record.get("value", {}).get("subject") == did:
+                return record["uri"]  # Get follow record URI
+
+        return None  # No follow record found
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to fetch follow records: " + str(e))
+        return None
+
+def unfollow_user(session, handle):
+    did = get_did_from_handle(session, handle)
+    if not did:
+        return
+
+    # Fetch the follow record URI
+    follow_uri = get_follow_record_uri(session, did)
+    if not follow_uri:
+        xbmcgui.Dialog().ok("Error", "Follow record for @" + handle + " not found.")
+        return
+
+    url = BASE_URL + "com.atproto.repo.deleteRecord"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    data = {
+        "repo": session["did"],
+        "collection": "app.bsky.graph.follow",
+        "rkey": follow_uri.split("/")[-1]  # Extract rkey from URI
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        xbmcgui.Dialog().ok("Success", "You have unfollowed @" + handle)
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to unfollow @" + handle + ": " + str(e))
+
+
+def block_user(session, handle=None):
+    if handle is None:  # If no handle is given, prompt user
+        keyboard = xbmc.Keyboard("", "Enter the handle of the user to block")
+        keyboard.doModal()
+        if keyboard.isConfirmed():
+            handle = keyboard.getText().strip()
+
+    if not handle:
+        xbmcgui.Dialog().ok("Error", "No handle entered.")
+        return
+
+    did = get_did_from_handle(session, handle)
+    if not did:
+        return  # Stop if DID lookup fails
+
+    url = BASE_URL + "com.atproto.repo.createRecord"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    data = {
+        "repo": session["did"],
+        "collection": "app.bsky.graph.block",
+        "record": {
+            "$type": "app.bsky.graph.block",
+            "subject": did,
+            "createdAt": datetime.datetime.utcnow().isoformat() + "Z"
+        }
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        xbmcgui.Dialog().ok("Success", "You have blocked @" + handle)
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to block @" + handle + ": " + str(e))
+
+def unblock_user(session, handle=None):
+    if handle is None:  # If no handle is given, prompt user
+        keyboard = xbmc.Keyboard("", "Enter the handle of the user to unblock")
+        keyboard.doModal()
+        if keyboard.isConfirmed():
+            handle = keyboard.getText().strip()
+
+    if not handle:
+        xbmcgui.Dialog().ok("Error", "No handle entered.")
+        return
+
+    did = get_did_from_handle(session, handle)
+    if not did:
+        return  # Stop if DID lookup fails
+
+    url = BASE_URL + "app.bsky.graph.unblock"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    data = {"subject": did}
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        xbmcgui.Dialog().ok("Success", "You have unblocked @" + handle)
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to unblock @" + handle + ": " + str(e))
 
 # Display menu
 def display_settings_menu(session):
@@ -431,20 +616,6 @@ def display_settings_menu(session):
             block_user(session)
         elif choice == 4:
             install_game()
-
-# Display game invite options in home feed
-def display_game_invite_options(game_title):
-    options = ["Accept Invite", "Decline Invite"]
-    dialog = xbmcgui.Dialog()
-    invite_choice = dialog.select("Game Invite", options)
-    
-    if invite_choice == 0:  # Accept Invite
-        if game_title in load_games():
-            launch_game(game_title)
-        else:
-            xbmcgui.Dialog().ok("Game Not Found", "{} is not installed.".format(game_title))
-    elif invite_choice == 1:  # Decline Invite
-        return
 
 # Display home feed
 def display_home_feed(session):
@@ -479,9 +650,39 @@ def display_home_feed(session):
             match = re.match(r"(.*) would like to play '(.*)'", post_text)
             if match:
                 game_title = match.group(2)
-                display_game_invite_options(game_title)
+                if game_title in load_games():
+                    dialog = xbmcgui.Dialog()
+                    join_choice = dialog.yesno("Game Invite", "{} has invited you to play '{}'. Join?".format(author_handle, game_title))
+                    if join_choice:
+                        launch_game(game_title)
+                else:
+                    xbmcgui.Dialog().ok("Game Not Found", "{} is not installed.".format(game_title))
             else:
                 xbmcgui.Dialog().ok(author_handle, post_text)
+
+def display_user_feed(session, handle):
+    url = BASE_URL + "app.bsky.feed.getAuthorFeed"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    params = {"actor": handle, "limit": 10}
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        posts = data.get("feed", [])
+        profile = data.get("profile", {})
+        
+        display_name = profile.get("displayName", "Unknown")
+        bio = " | ".join(profile.get("description", "").splitlines())
+        
+        items = ["@{} - {}".format(handle, display_name)]
+        if bio:
+            items.append(bio)
+        items += [p["post"]["record"].get("text", "No content") for p in posts]
+        
+        xbmcgui.Dialog().select("@" + handle + "'s Feed", items)
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to fetch feed: " + str(e))
 
 # Fetch post content by URI
 def fetch_post_content(session, uri):
@@ -522,14 +723,92 @@ def display_notifications(session):
 # Display followers
 def display_followers(session):
     followers = fetch_followers(session)
-    items = [f.get('displayName', 'No Name') + ' (' + f.get('handle', 'Unknown') + ')' for f in followers]
-    xbmcgui.Dialog().select('Followers', items)
+    items = [f.get("displayName", "No Name") + " (" + f.get("handle", "Unknown") + ")" for f in followers]
+
+    choice = xbmcgui.Dialog().select("Followers", items)
+    if choice >= 0:
+        handle = followers[choice].get("handle")
+        show_user_options(session, handle)
 
 # Display following
 def display_following(session):
     following = fetch_following(session)
-    items = [f.get('displayName', 'No Name') + ' (' + f.get('handle', 'Unknown') + ')' for f in following]
-    xbmcgui.Dialog().select('Following', items)
+    items = [f.get("displayName", "No Name") + " (" + f.get("handle", "Unknown") + ")" for f in following]
+
+    choice = xbmcgui.Dialog().select("Following", items)
+    if choice >= 0:
+        handle = following[choice].get("handle")
+        show_user_options(session, handle)
+
+def display_mutuals(session):
+    mutuals = fetch_mutuals(session)
+    items = mutuals if mutuals else ["No mutuals found."]
+
+    choice = xbmcgui.Dialog().select("Mutual Followers", items)
+    if choice >= 0:
+        handle = mutuals[choice]
+        show_user_options(session, handle)
+
+def show_user_options(session, handle):
+    options = ["View Feed", "Follow / Unfollow User", "Invite to Game", "Send Message", "Block"]
+    choice = xbmcgui.Dialog().select("User Options - @" + handle, options)
+
+    if choice == 0:
+        display_user_feed(session, handle)
+    elif choice == 1:
+        toggle_follow(session, handle)
+    elif choice == 2:
+        invite_user_to_game(session, handle)
+    elif choice == 3:
+        send_message(session, handle)
+    elif choice == 4:
+        toggle_block(session, handle)
+
+def toggle_follow(session, handle):
+    following_users = set(f.get("handle") for f in fetch_following(session))
+
+    if handle in following_users:
+        unfollow_user(session, handle)  # Now correctly calls unfollow
+    else:
+        follow_user(session, handle)  # Calls follow function
+
+def toggle_block(session, handle):
+    blocked_users = set(f.get("handle") for f in fetch_blocked_users(session))
+
+    if handle in blocked_users:
+        unblock_user(session, handle)  # Use working unblock function
+    else:
+        block_user(session, handle)  # Use working block function
+
+def invite_user_to_game(session, handle):
+    games = load_games()
+    if not games:
+        xbmcgui.Dialog().ok("Cortana Chat", "No games found in games.txt.")
+        return
+
+    dialog = xbmcgui.Dialog()
+    selected_game = dialog.select("Select a game to invite", list(games.keys()))
+    if selected_game >= 0:
+        game_title = list(games.keys())[selected_game]
+        invite_text = "[CORTANALIVE] " + session["handle"] + " invited @" + handle + " to play '" + game_title + "'!"
+
+        now = datetime.datetime.utcnow().isoformat() + "Z"
+        post = {
+            "$type": "app.bsky.feed.post",
+            "text": invite_text,
+            "createdAt": now,
+        }
+
+        url = BASE_URL + "com.atproto.repo.createRecord"
+        headers = {"Authorization": "Bearer " + session["accessJwt"]}
+        data = {"repo": session["did"], "collection": "app.bsky.feed.post", "record": post}
+
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()
+            xbmcgui.Dialog().ok("Cortana Chat", "Game invite sent to @" + handle)
+        except requests.exceptions.RequestException as e:
+            xbmcgui.Dialog().ok("Cortana Chat", "Failed to send game invite: " + str(e))
 
 # Display conversations
 def display_conversations(session):
@@ -574,6 +853,65 @@ def display_message_options(session, convo_id, game_title):
         launch_game(game_title)
     elif choice == 2:
         display_messages(session, convo_id)
+
+# Send a message
+def send_message(session, handle):
+    keyboard = xbmc.Keyboard('', 'Enter your message')
+    keyboard.doModal()
+    
+    if keyboard.isConfirmed():
+        message_text = keyboard.getText().strip()
+        if not message_text:
+            xbmcgui.Dialog().ok("Error", "No message entered.")
+            return
+
+        # Find the conversation ID (or start a new conversation)
+        convo_id = get_or_create_conversation(session, handle)
+        if not convo_id:
+            xbmcgui.Dialog().ok("Error", "Failed to find or start conversation with @" + handle)
+            return
+
+        now = datetime.datetime.utcnow().isoformat() + 'Z'
+        message = {'$type': 'chat.bsky.convo.message', 'text': message_text, 'createdAt': now}
+        url = CHAT_URL + 'chat.bsky.convo.sendMessage'
+        headers = {'Authorization': 'Bearer ' + session['accessJwt']}
+        data = {'convoId': convo_id, 'message': message}
+
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()
+            xbmcgui.Dialog().ok("Success", "Message sent to @" + handle)
+        except requests.exceptions.RequestException as e:
+            xbmcgui.Dialog().ok("Error", "Failed to send message: " + str(e))
+
+# Check if a conversation already exists, otherwise makes a new one.
+def get_or_create_conversation(session, handle):
+    # Fetch existing conversations
+    conversations = fetch_conversations(session)
+
+    # Look for an existing conversation with this handle
+    for convo in conversations:
+        if convo.get('user_handle') == handle:
+            return convo.get('id')
+
+    # If no conversation exists, start a new one
+    did = get_did_from_handle(session, handle)
+    if not did:
+        return None
+
+    url = CHAT_URL + 'chat.bsky.convo.createConversation'
+    headers = {'Authorization': 'Bearer ' + session['accessJwt']}
+    data = {'participants': [did]}
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        return response.json().get('convoId')
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to start conversation with @" + handle + ": " + str(e))
+        return None
+
+
 
 # Reply to a conversation and return to message list
 def reply_to_conversation(session, convo_id):
