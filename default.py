@@ -12,6 +12,7 @@ import time
 # BlueSky API endpoints
 BASE_URL = 'https://bsky.social/xrpc/'
 CHAT_URL = 'https://api.bsky.chat/xrpc/'
+GAMES_FILE = xbmc.translatePath('Q://games.txt')
 
 # Load login credentials
 def load_credentials():
@@ -708,7 +709,7 @@ def unblock_user(session, handle=None):
 def display_settings_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Enable Notifications', 'Disable Notifications', 'Follow User', 'Block User', 'Install Game']
+        options = ['Enable Notifications', 'Disable Notifications', 'Follow User', 'Block User', 'Game Settings']
         choice = dialog.select('Settings', options)
         if choice == -1:
             return  # User backed out
@@ -721,7 +722,22 @@ def display_settings_menu(session):
         elif choice == 3:
             block_user(session)
         elif choice == 4:
+            display_game_settings_menu(session)
+
+# Display menu
+def display_game_settings_menu(session):
+    while True:
+        dialog = xbmcgui.Dialog()
+        options = ['Install Game', 'Bulk Install', 'Edit Games (ignore crash!)']
+        choice = dialog.select('Game Settings', options)
+        if choice == -1:
+            return  # User backed out
+        elif choice == 0:
             install_game()
+        elif choice == 1:
+            install_game_bulk()
+        elif choice == 2:
+            edit_games_menu()
 
 # Display home feed
 def display_home_feed(session):
@@ -1104,17 +1120,85 @@ def invite_to_game(session, convo_id):
         except requests.exceptions.RequestException as e:
             xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send invite: ' + str(e))
 
-# Load game paths
 def load_games():
-    games_file = xbmc.translatePath('special://home/games.txt')
-    games = {}
-    if os.path.exists(games_file):
-        with open(games_file, 'r') as f:
-            for line in f:
-                parts = line.strip().split('", "')
-                if len(parts) == 2:
-                    games[parts[0].strip('"')] = parts[1].strip('"')
+    """Load games from games.txt and return as a list of (name, path) tuples."""
+    games = []
+    if os.path.exists(GAMES_FILE):
+        with open(GAMES_FILE, "r") as file:
+            for line in file:
+                line = line.strip()
+                if line.startswith('"') and line.endswith('"'):
+                    try:
+                        name, path = line[1:-1].split('", "')
+                        games.append((name, path))
+                    except ValueError:
+                        xbmc.log("Skipping malformed line: {}".format(line), xbmc.LOGERROR)
     return games
+
+def save_games(games):
+    """Save updated games list back to games.txt."""
+    with open(GAMES_FILE, "w") as file:
+        for name, path in games:
+            file.write('"{}", "{}"\n'.format(name, path))
+
+def edit_game_name(games, index):
+    """Open a keyboard dialog to rename the game."""
+    old_name = games[index][0]
+    keyboard = xbmc.Keyboard(old_name, "Enter New Game Name")
+    keyboard.doModal()
+    if keyboard.isConfirmed():
+        new_name = keyboard.getText().strip()
+        if new_name:
+            games[index] = (new_name, games[index][1])  # Update name
+            save_games(games)
+            xbmcgui.Dialog().ok("Success", "Game name updated successfully!")
+
+def edit_game_path(games, index):
+    """Open a file browser to select a new .xbe path."""
+    dialog = xbmcgui.Dialog()
+    new_path = dialog.browse(1, "Select New Game Path", 'files', '.xbe', False, False, '')
+    if new_path:
+        games[index] = (games[index][0], new_path)  # Update path
+        save_games(games)
+        xbmcgui.Dialog().ok("Success", "Game path updated successfully!")
+
+def edit_game_menu(games, index):
+    """Show a submenu to allow the user to edit or remove a game."""
+    dialog = xbmcgui.Dialog()
+    options = ["Edit Name", "Edit Path", "Remove Game", "Cancel"]
+    choice = dialog.select("Edit Game Entry", options)
+
+    if choice == 0:
+        edit_game_name(games, index)
+    elif choice == 1:
+        edit_game_path(games, index)
+    elif choice == 2:
+        remove_game(games, index)
+
+def edit_games():
+    """Main game editing menu."""
+    games = load_games()
+    if not games:
+        xbmcgui.Dialog().ok("Error", "No games found in games.txt!")
+        return
+
+    dialog = xbmcgui.Dialog()
+    game_list = ["{} - {}".format(name, path) for name, path in games]
+    game_list.append("Cancel")  # Add cancel option
+    selected = dialog.select("Select Game to Edit", game_list)
+
+    if selected != -1 and selected < len(games):  # If valid selection
+        edit_game_menu(games, selected)
+
+def remove_game(games, index):
+    """Remove a game from the list after user confirmation."""
+    game_name = games[index][0]
+    
+    confirm = xbmcgui.Dialog().yesno("Confirm", "Are you sure you want to remove '{}' from the list?".format(game_name))
+    if confirm:
+        del games[index]  # Remove the game
+        save_games(games)  # Save the updated list
+        xbmcgui.Dialog().ok("Success", "'{}' has been removed.".format(game_name))
 
 # Launch a game
 def launch_game(game_title):
@@ -1193,15 +1277,52 @@ def install_game(game_title=None):
     else:
         xbmcgui.Dialog().ok("Cancelled", "No game name entered.")
 
+def install_game_bulk():
+    # Let the user pick a directory
+    root_dir = xbmcgui.Dialog().browse(0, "Select Game Directory", 'files')
+    if not root_dir:
+        xbmcgui.Dialog().ok("Error", "No directory selected!")
+        return
+    
+    games_installed = []
+    game_entries = []
+    
+    # Walk through the directory recursively to find all .xbe files
+    for subdir, _, files in os.walk(root_dir):
+        if "default.xbe" in files:
+            xbe_path = os.path.join(subdir, "default.xbe")
+            folder_name = os.path.basename(subdir)
+            
+            # Remove anything in brackets (e.g., "Halo 2 (GLO)" -> "Halo 2")
+            game_name = re.sub(r'\s*\(.*?\)', '', folder_name).strip()
+            
+            if game_name:
+                game_entries.append((game_name, xbe_path))
+                games_installed.append(game_name)
+    
+    if game_entries:
+        # Sort games alphabetically before writing to games.txt
+        game_entries.sort(key=lambda x: x[0])
+        for game_name, xbe_path in game_entries:
+            write_to_games_txt(game_name, xbe_path)
+        
+        xbmcgui.Dialog().ok("Games Installed", "The following games were installed:\n" + "\n".join(sorted(games_installed)))
+    else:
+        xbmcgui.Dialog().ok("No Games Found", "No valid games were found in the selected directory.")
+
 # Enable notifications
 def enable_notifications():
-    script_path = os.path.join(os.path.dirname(__file__), 'notifier.py')
-    xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
+    enable_script_path = os.path.join(os.path.dirname(__file__), 'notifier.py')
+    xbmc.executebuiltin('RunScript("{}")'.format(enable_script_path.replace("\\", "\\\\")))
 
 # Disable notifications
 def disable_notifications():
-    script_path = os.path.join(os.path.dirname(__file__), 'stop_notifier.py')
-    xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
+    disable_script_path = os.path.join(os.path.dirname(__file__), 'stop_notifier.py')
+    xbmc.executebuiltin('RunScript("{}")'.format(disable_script_path.replace("\\", "\\\\")))
+
+# Edit games
+def edit_games_menu():
+    edit_games()
 
 # Main function with direct menu navigation
 def main():
@@ -1227,9 +1348,6 @@ def main():
             display_home_feed(session)
         elif option == "Settings":
             display_settings_menu(session)
-
-        else:
-            display_menu(session)
     else:
         display_menu(session)
 
