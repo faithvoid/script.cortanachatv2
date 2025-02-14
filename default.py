@@ -736,7 +736,7 @@ def display_home_feed(session):
             items.append("Next Page")
 
         dialog = xbmcgui.Dialog()
-        choice = dialog.select("Home Feed", items)
+        choice = dialog.select("Beacons & Activity", items)
 
         if choice == -1:
             break  # User backed out
@@ -751,7 +751,7 @@ def display_home_feed(session):
         elif next_cursor and choice == len(items) - 1:
             cursor = next_cursor
         else:
-            selected_post = feed[choice - 3].get("post", {})
+            selected_post = feed[choice - 4].get("post", {})
             author_handle = selected_post.get("author", {}).get("handle", "Unknown")
             post_text = selected_post.get("record", {}).get("text", "No content")
             
@@ -970,6 +970,20 @@ def display_message_options(session, convo_id, game_title):
         launch_game(game_title)
     elif choice == 2:
         display_messages(session, convo_id)
+
+# Display game invite options in home feed
+def display_game_invite_options(game_title):
+    options = ["Accept Invite", "Decline Invite"]
+    dialog = xbmcgui.Dialog()
+    invite_choice = dialog.select("Game Invite", options)
+    
+    if invite_choice == 0:  # Accept Invite
+        if game_title in load_games():
+            launch_game(game_title)
+        else:
+            xbmcgui.Dialog().ok("Game Not Found", "{} is not installed.".format(game_title))
+    elif invite_choice == 1:  # Decline Invite
+        return
 
 # Send a message
 def send_message(session, handle):
