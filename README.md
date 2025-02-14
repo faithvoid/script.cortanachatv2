@@ -35,6 +35,9 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 ## Not Working
 - TBA
 
+## Bugs
+- You need to disable notifications (if enabled) before launching a game, or your Xbox may crash! The script currently terminates properly when running a game through the invite system, but needs to be terminated via "Disable Notifications" in the Settings menu to exit cleanly.
+
 ## TODO:
 - Add / Unfriend / Block functions
 - Show only "mutual" followers under "Friends"?
