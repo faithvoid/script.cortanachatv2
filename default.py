@@ -7,6 +7,7 @@ import json
 import datetime
 import re
 from datetime import timedelta
+import time
 
 # BlueSky API endpoints
 BASE_URL = 'https://bsky.social/xrpc/'
@@ -206,7 +207,7 @@ def create_post(session):
         post_text = keyboard.getText()
         
         # trailing "Z" is preferred over "+00:00"
-        now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         
         # Detect facets for hashtags and mentions
         facets = detect_facets(post_text, session)
@@ -242,7 +243,7 @@ def create_post_media(session):
         post_text = keyboard.getText()
         
         # trailing "Z" is preferred over "+00:00"
-        now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         
         # Detect facets for hashtags and mentions
         facets = detect_facets(post_text, session)
@@ -313,7 +314,7 @@ def create_post_invite(session):
         game_title = list(games.keys())[selected_game]
         invite_text = "{} would like to play '{}' (Xbox)".format(session['handle'], game_title)
 
-        now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         post = {
             "$type": "app.bsky.feed.post",
             "text": invite_text,
@@ -332,9 +333,9 @@ def create_post_invite(session):
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            xbmcgui.Dialog().ok('Cortana Chat', 'Game invite posted successfully!')
+            xbmcgui.Dialog().ok('Cortana Chat', 'Beacon for {} posted successfully!'.format(game_title))
         except requests.exceptions.RequestException as e:
-            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to post game invite: {}'.format(str(e)))
+            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to post beacon: {}'.format(str(e)))
 
 # Function to upload files
 def upload_file(base_url, access_token, filename, img_bytes):
@@ -663,7 +664,7 @@ def display_home_feed(session):
     cursor = None
     while True:
         feed, next_cursor = fetch_home_feed(session, cursor)
-        items = ["Post", "Post Media", "Game Invite"]
+        items = ["Post", "Post Media", "Set Beacon"]
         items += [post['post']['author'].get('handle', 'Unknown') + ': ' + post['post']['record'].get('text', 'No content') 
                   for post in feed if 'post' in post and 'author' in post['post'] and 'record' in post['post']]
 
