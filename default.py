@@ -172,6 +172,23 @@ def fetch_messages(session, convo_id):
         xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch messages: ' + str(e))
         return []
 
+# Fetch post content by URI
+def fetch_post_content(session, uri):
+    url = BASE_URL + "app.bsky.feed.getPosts"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    params = {"uris": uri}
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        posts = response.json().get("posts", [])
+        if posts:
+            return posts[0].get("record", {}).get("text", "No content")
+    except requests.exceptions.RequestException:
+        return "Failed to load content"
+
+    return "No content"
+
 # Display menu
 def display_menu(session):
     while True:
@@ -251,9 +268,21 @@ def display_home_feed(session):
 # Display notifications
 def display_notifications(session):
     notifications = fetch_notifications(session)
-    items = [n.get('author', {}).get('handle', 'Unknown') + ': ' + n.get('record', {}).get('text', '') for n in notifications]
-    xbmcgui.Dialog().select('Notifications', items)
+    items = []
 
+    for n in notifications:
+        author = n.get("author", {}).get("handle", "Unknown")
+        reason = n.get("reason", "Unknown")
+        text = n.get("record", {}).get("text", "")
+
+        # Fetch referenced post content if it's a like or repost
+        if reason in ["like", "repost"]:
+            post_uri = n.get("reasonSubject", "")
+            text = fetch_post_content(session, post_uri) if post_uri else "No content"
+
+        items.append("{} - {} - {}".format(reason, author, text))
+
+    xbmcgui.Dialog().select("Notifications", items)
 # Display followers
 def display_followers(session):
     followers = fetch_followers(session)
