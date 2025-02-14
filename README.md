@@ -26,6 +26,7 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 
 ## Working
 - Sending / receiving messages
+- Following/unfollowing/blocking/unblocking users (both manually and via Followers/Following/Mutuals/Blocked menus)
 - Receiving chat/notification toast pop-ups by selecting "Enable Notifications" in settings
 - Inviting other users to games (and accepting invites from other users) via messages and the home feed.
 - Viewng & posting to your home feed
