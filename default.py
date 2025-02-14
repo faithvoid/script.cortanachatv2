@@ -31,7 +31,7 @@ def authenticate(username, app_password):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Authentication failed: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Authentication failed: ' + str(e))
         return None
 
 # Fetch home feed
@@ -59,7 +59,7 @@ def fetch_home_feed(session, cursor=None):
         
         return feed, next_cursor
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch home feed: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch home feed: ' + str(e))
         return [], None
 
 # Fetch user profile to resolve handle
@@ -90,7 +90,7 @@ def fetch_notifications(session):
         response.raise_for_status()
         return response.json().get('notifications', [])
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch notifications: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch notifications: ' + str(e))
         return []
 
 # Fetch followers
@@ -103,7 +103,7 @@ def fetch_followers(session):
         response.raise_for_status()
         return response.json().get('followers', [])
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch followers: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch followers: ' + str(e))
         return []
 
 # Fetch following
@@ -116,7 +116,7 @@ def fetch_following(session):
         response.raise_for_status()
         return response.json().get('follows', [])
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch following: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch following: ' + str(e))
         return []
 
 # Fetch conversations with proper user handles in bulk
@@ -145,7 +145,7 @@ def fetch_conversations(session):
         
         return conversations
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch conversations: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch conversations: ' + str(e))
         return []
 
 # Fetch messages for a conversation
@@ -169,25 +169,179 @@ def fetch_messages(session, convo_id):
         
         return messages
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to fetch messages: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to fetch messages: ' + str(e))
         return []
 
-# Fetch post content by URI
-def fetch_post_content(session, uri):
-    url = BASE_URL + "app.bsky.feed.getPosts"
-    headers = {"Authorization": "Bearer " + session["accessJwt"]}
-    params = {"uris": uri}
+# Create a new post
+def create_post(session):
+    keyboard = xbmc.Keyboard('', 'Enter your post')
+    keyboard.doModal()
+    if keyboard.isConfirmed():
+        post_text = keyboard.getText()
+        
+        # trailing "Z" is preferred over "+00:00"
+        now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        
+        # Detect facets for hashtags and mentions
+        facets = detect_facets(post_text, session)
 
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        posts = response.json().get("posts", [])
-        if posts:
-            return posts[0].get("record", {}).get("text", "No content")
-    except requests.exceptions.RequestException:
-        return "Failed to load content"
+        post = {
+            "$type": "app.bsky.feed.post",
+            "text": post_text,
+            "facets": facets,
+            "createdAt": now,
+        }
 
-    return "No content"
+        url = BASE_URL + 'com.atproto.repo.createRecord'
+        headers = {
+            'Authorization': 'Bearer ' + session['accessJwt']
+        }
+        data = {
+            'repo': session['did'],
+            'collection': 'app.bsky.feed.post',
+            'record': post
+        }
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()  # Raise an error for bad status codes
+            xbmcgui.Dialog().ok('Cortana Chat', 'Post created successfully!')
+        except requests.exceptions.RequestException as e:
+            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to create post. Error: {}'.format(str(e)))
+
+# Create a new post with media
+def create_post_media(session):
+    keyboard = xbmc.Keyboard('', 'Enter your post')
+    keyboard.doModal()
+    if keyboard.isConfirmed():
+        post_text = keyboard.getText()
+        
+        # trailing "Z" is preferred over "+00:00"
+        now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        
+        # Detect facets for hashtags and mentions
+        facets = detect_facets(post_text, session)
+
+        # Prompt user to select image files
+        dialog = xbmcgui.Dialog()
+        image_paths = []
+        while True:
+            image_path = dialog.browse(1, 'Select Image', 'files', '.jpg|.jpeg|.png|.webp', False, False, '')
+            if image_path:
+                image_paths.append(image_path)
+                if len(image_paths) >= 4:  # Limit to 4 images
+                    break
+                if not dialog.yesno('Cortana Chat', 'Do you want to add another image?'):
+                    break
+            else:
+                break
+
+        # Upload images and prepare the media structure
+        images = []
+        for image_path in image_paths:
+            with open(image_path, 'rb') as f:
+                img_bytes = f.read()
+            # this size limit is specified in the app.bsky.embed.images lexicon
+            if len(img_bytes) > 1000000:
+                xbmcgui.Dialog().ok('Cortana Chat', 'Image file size too large. 1000000 bytes (1MB) maximum, got: {}'.format(len(img_bytes)))
+                return
+            blob = upload_file(BASE_URL, session['accessJwt'], image_path, img_bytes)
+            images.append({"alt": "", "image": blob})
+
+        post = {
+            "$type": "app.bsky.feed.post",
+            "text": post_text,
+            "facets": facets,
+            "createdAt": now,
+            "embed": {
+                "$type": "app.bsky.embed.images",
+                "images": images
+            }
+        }
+
+        url = BASE_URL + 'com.atproto.repo.createRecord'
+        headers = {
+            'Authorization': 'Bearer ' + session['accessJwt']
+        }
+        data = {
+            'repo': session['did'],
+            'collection': 'app.bsky.feed.post',
+            'record': post
+        }
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()  # Raise an error for bad status codes
+            xbmcgui.Dialog().ok('Cortana Chat', 'Post created successfully!')
+        except requests.exceptions.RequestException as e:
+            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to create post. Error: {}'.format(str(e)))
+
+# Function to upload files
+def upload_file(base_url, access_token, filename, img_bytes):
+    suffix = filename.split(".")[-1].lower()
+    mimetype = "application/octet-stream"
+    if suffix in ["png"]:
+        mimetype = "image/png"
+    elif suffix in ["jpeg", "jpg"]:
+        mimetype = "image/jpeg"
+    elif suffix in ["webp"]:
+        mimetype = "image/webp"
+
+    resp = requests.post(
+        base_url + "com.atproto.repo.uploadBlob",
+        headers={
+            "Content-Type": mimetype,
+            "Authorization": "Bearer " + access_token,
+        },
+        data=img_bytes,
+    )
+    resp.raise_for_status()
+    return resp.json()["blob"]
+
+# Detects mention / tag facets and hyperlinks them accordingly.
+def detect_facets(text, session):
+    facets = []
+    utf16_text = text
+
+    def utf16_index_to_utf8_index(i):
+        return len(utf16_text[:i].encode('utf-8'))
+
+    # Detect mentions
+    mention_pattern = re.compile(r'(^|\s|\()(@[a-zA-Z0-9.-]+)(\b)')
+    for match in mention_pattern.finditer(utf16_text):
+        mention = match.group(2)
+        handle = mention[1:]  # Remove the '@' character
+        start = match.start(2)
+        end = match.end(2)
+        did = resolve_did(handle, session)
+        if did:
+            facets.append({
+                'index': {
+                    'byteStart': utf16_index_to_utf8_index(start),
+                    'byteEnd': utf16_index_to_utf8_index(end),
+                },
+                'features': [{
+                    '$type': 'app.bsky.richtext.facet#mention',
+                    'did': did
+                }]
+            })
+
+    # Detect hashtags
+    hashtag_pattern = re.compile(r'(#[^\d\s]\S*)')
+    for match in hashtag_pattern.finditer(utf16_text):
+        hashtag = match.group(1)
+        start = match.start(1)
+        end = match.end(1)
+        facets.append({
+            'index': {
+                'byteStart': utf16_index_to_utf8_index(start),
+                'byteEnd': utf16_index_to_utf8_index(end),
+            },
+            'features': [{
+                '$type': 'app.bsky.richtext.facet#tag',
+                'tag': hashtag[1:]
+            }]
+        })
+
+    return facets
 
 # Display menu
 def display_menu(session):
@@ -247,25 +401,48 @@ def display_home_feed(session):
     cursor = None
     while True:
         feed, next_cursor = fetch_home_feed(session, cursor)
-        items = [post['post']['author'].get('handle', 'Unknown') + ': ' + post['post']['record'].get('text', 'No content') for post in feed if 'post' in post and 'author' in post['post'] and 'record' in post['post']]
-        
+        items = ["Post", "Post Media"]  # New options for posting
+        items += [post['post']['author'].get('handle', 'Unknown') + ': ' + post['post']['record'].get('text', 'No content') 
+                  for post in feed if 'post' in post and 'author' in post['post'] and 'record' in post['post']]
+
         if next_cursor:
-            items.append('Next Page')
-        
+            items.append("Next Page")
+
         dialog = xbmcgui.Dialog()
-        choice = dialog.select('Home Feed', items)
-        
+        choice = dialog.select("Home Feed", items)
+
         if choice == -1:
             break  # User backed out
+        elif choice == 0:
+            create_post(session)  # Call function to create a post
+        elif choice == 1:
+            create_post_media(session)  # Call function to create a post with media
         elif next_cursor and choice == len(items) - 1:
             cursor = next_cursor  # Load next page
         else:
-            selected_post = feed[choice].get('post', {})
-            author_handle = selected_post.get('author', {}).get('handle', 'Unknown')
-            post_text = selected_post.get('record', {}).get('text', 'No content')
+            selected_post = feed[choice - 2].get("post", {})  # Adjust for added options
+            author_handle = selected_post.get("author", {}).get("handle", "Unknown")
+            post_text = selected_post.get("record", {}).get("text", "No content")
             xbmcgui.Dialog().ok(author_handle, post_text)
 
-# Display notifications
+# Fetch post content by URI
+def fetch_post_content(session, uri):
+    url = BASE_URL + "app.bsky.feed.getPosts"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    params = {"uris": uri}
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        posts = response.json().get("posts", [])
+        if posts:
+            return posts[0].get("record", {}).get("text", "No content")
+    except requests.exceptions.RequestException:
+        return "Failed to load content"
+
+    return "No content"
+
+# Display notifications with post content
 def display_notifications(session):
     notifications = fetch_notifications(session)
     items = []
@@ -283,6 +460,7 @@ def display_notifications(session):
         items.append("{} - {} - {}".format(reason, author, text))
 
     xbmcgui.Dialog().select("Notifications", items)
+
 # Display followers
 def display_followers(session):
     followers = fetch_followers(session)
@@ -353,9 +531,9 @@ def reply_to_conversation(session, convo_id):
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            xbmcgui.Dialog().ok('Cortana Chat', 'Reply sent successfully!')
+            xbmcgui.Dialog().ok('xSky', 'Reply sent successfully!')
         except requests.exceptions.RequestException as e:
-            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send reply: ' + str(e))
+            xbmcgui.Dialog().ok('xSky', 'Failed to send reply: ' + str(e))
     display_messages(session, convo_id)
 
 # Nudge function
@@ -370,15 +548,15 @@ def send_nudge(session, convo_id):
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
-        xbmcgui.Dialog().ok('Cortana Chat', 'Nudge sent successfully!')
+        xbmcgui.Dialog().ok('xSky', 'Nudge sent successfully!')
     except requests.exceptions.RequestException as e:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send nudge: ' + str(e))
+        xbmcgui.Dialog().ok('xSky', 'Failed to send nudge: ' + str(e))
 
 # Invite to a game
 def invite_to_game(session, convo_id):
     games = load_games()
     if not games:
-        xbmcgui.Dialog().ok('Cortana Chat', 'No games found in games.txt.')
+        xbmcgui.Dialog().ok('xSky', 'No games found in games.txt.')
         return
     
     dialog = xbmcgui.Dialog()
@@ -394,10 +572,10 @@ def invite_to_game(session, convo_id):
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            xbmcgui.Dialog().ok('Cortana Chat', 'Invite sent successfully!')
+            xbmcgui.Dialog().ok('xSky', 'Invite sent successfully!')
 	    return
         except requests.exceptions.RequestException as e:
-            xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send invite: ' + str(e))
+            xbmcgui.Dialog().ok('xSky', 'Failed to send invite: ' + str(e))
 
 # Load game paths
 def load_games():
@@ -492,20 +670,17 @@ def install_game(game_title=None):
 def enable_notifications():
     script_path = os.path.join(os.path.dirname(__file__), 'notifier.py')
     xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
-    return
 
 # Disable notifications
 def disable_notifications():
     script_path = os.path.join(os.path.dirname(__file__), 'stop_notifier.py')
     xbmc.executebuiltin('RunScript("{}")'.format(script_path.replace("\\", "\\\\")))
-    return
-
 
 # Main function with direct menu navigation
 def main():
     username, app_password = load_credentials()
     if not username or not app_password:
-        xbmcgui.Dialog().ok('Cortana Chat', 'Enter your BlueSky username and app password in login.txt.')
+        xbmcgui.Dialog().ok('xSky', 'Enter your BlueSky username and app password in login.txt.')
         return
 
     session = authenticate(username, app_password)
