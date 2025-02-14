@@ -1121,8 +1121,7 @@ def invite_to_game(session, convo_id):
             xbmcgui.Dialog().ok('Cortana Chat', 'Failed to send invite: ' + str(e))
 
 def load_games():
-    """Load games from games.txt and return as a list of (name, path) tuples."""
-    games = []
+    games = {}
     if os.path.exists(GAMES_FILE):
         with open(GAMES_FILE, "r") as file:
             for line in file:
@@ -1130,11 +1129,11 @@ def load_games():
                 if line.startswith('"') and line.endswith('"'):
                     try:
                         name, path = line[1:-1].split('", "')
-                        games.append((name, path))
+                        games[name] = path  # Store in dictionary
                     except ValueError:
                         xbmc.log("Skipping malformed line: {}".format(line), xbmc.LOGERROR)
     return games
-
+	
 def save_games(games):
     """Save updated games list back to games.txt."""
     with open(GAMES_FILE, "w") as file:
