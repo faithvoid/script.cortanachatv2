@@ -426,8 +426,9 @@ def display_menu(session):
 def display_friends_menu(session):
     while True:
         dialog = xbmcgui.Dialog()
-        options = ['Followers', 'Following', 'Mutuals', 'Follow User', 'Block User']
-        choice = dialog.select('Friends', options)
+        options = ["Followers", "Following", "Mutuals", "Blocked", "Follow User", "Block User"]
+        choice = dialog.select("Friends", options)
+        
         if choice == -1:
             return  # User backed out
         elif choice == 0:
@@ -437,8 +438,10 @@ def display_friends_menu(session):
         elif choice == 2:
             display_mutuals(session)
         elif choice == 3:
-            follow_user(session)
+            display_blocked(session)  # New blocked users section
         elif choice == 4:
+            follow_user(session)
+        elif choice == 5:
             block_user(session)
 
 def get_did_from_handle(session, handle):
@@ -511,6 +514,34 @@ def get_follow_record_uri(session, did):
         xbmcgui.Dialog().ok("Error", "Failed to fetch follow records: " + str(e))
         return None
 
+def get_block_record_uri(session, did, handle):
+    url = BASE_URL + "com.atproto.repo.listRecords"
+    headers = {"Authorization": "Bearer " + session["accessJwt"]}
+    params = {
+        "repo": session["did"],  # Your own repo
+        "collection": "app.bsky.graph.block",
+        "limit": 100  # Fetch up to 100 block records
+    }
+
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        records = response.json().get("records", [])
+
+        for record in records:
+            if record.get("value", {}).get("subject") == did:
+                if "uri" in record:
+                    return record["uri"].split("/")[-1]  # Extract rkey from URI
+                else:
+                    xbmcgui.Dialog().ok("Error", "Block record for @" + handle + " is missing 'uri'.")
+                    return None
+
+        xbmcgui.Dialog().ok("Error", "Block record for @" + handle + " not found.")
+        return None
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to fetch block records: " + str(e))
+        return None
+
 def unfollow_user(session, handle):
     did = get_did_from_handle(session, handle)
     if not did:
@@ -573,7 +604,7 @@ def block_user(session, handle=None):
         xbmcgui.Dialog().ok("Error", "Failed to block @" + handle + ": " + str(e))
 
 def unblock_user(session, handle=None):
-    if handle is None:  # If no handle is given, prompt user
+    if handle is None:
         keyboard = xbmc.Keyboard("", "Enter the handle of the user to unblock")
         keyboard.doModal()
         if keyboard.isConfirmed():
@@ -587,9 +618,19 @@ def unblock_user(session, handle=None):
     if not did:
         return  # Stop if DID lookup fails
 
-    url = BASE_URL + "app.bsky.graph.unblock"
+    # Fetch the block record rkey
+    block_rkey = get_block_record_uri(session, did, handle)
+    if not block_rkey:
+        xbmcgui.Dialog().ok("Error", "Could not find block record for @" + handle)
+        return
+
+    url = BASE_URL + "com.atproto.repo.deleteRecord"
     headers = {"Authorization": "Bearer " + session["accessJwt"]}
-    data = {"subject": did}
+    data = {
+        "repo": session["did"],
+        "collection": "app.bsky.graph.block",
+        "rkey": block_rkey  # Use correct rkey
+    }
 
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -749,8 +790,17 @@ def display_mutuals(session):
         handle = mutuals[choice]
         show_user_options(session, handle)
 
+def display_blocked(session):
+    blocked_users = fetch_blocked_users(session)
+    items = [b.get("handle", "Unknown") for b in blocked_users]
+
+    choice = xbmcgui.Dialog().select("Blocked Users", items)
+    if choice >= 0:
+        handle = blocked_users[choice].get("handle")
+        show_user_options(session, handle)
+
 def show_user_options(session, handle):
-    options = ["View Feed", "Follow / Unfollow User", "Invite to Game", "Send Message", "Block"]
+    options = ["View Feed", "Follow / Unfollow User", "Invite to Game", "Send Message", "Block / Unblock User"]
     choice = xbmcgui.Dialog().select("User Options - @" + handle, options)
 
     if choice == 0:
@@ -762,7 +812,7 @@ def show_user_options(session, handle):
     elif choice == 3:
         send_message(session, handle)
     elif choice == 4:
-        toggle_block(session, handle)
+        toggle_block(session, handle)  # Now supports unblocking
 
 def toggle_follow(session, handle):
     following_users = set(f.get("handle") for f in fetch_following(session))
@@ -776,9 +826,9 @@ def toggle_block(session, handle):
     blocked_users = set(f.get("handle") for f in fetch_blocked_users(session))
 
     if handle in blocked_users:
-        unblock_user(session, handle)  # Use working unblock function
+        unblock_user(session, handle)  # Call the existing function
     else:
-        block_user(session, handle)  # Use working block function
+        block_user(session, handle)  # Call the existing function
 
 def invite_user_to_game(session, handle):
     games = load_games()
