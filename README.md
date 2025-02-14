@@ -27,7 +27,8 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 ## Working
 - Sending / receiving messages
 - Receiving chat/notification toast pop-ups by selecting "Enable Notifications" in settings
-- Inviting other users to games (and accepting invites from other users)
+- Inviting other users to games (and accepting invites from other users) via messages and via the home feed (joining via home feed not yet implemented, stay tuned!)!
+- Viewng & posting to your home feed
 - Viewing following/followers sections
 - Multi-user logins via XBMC's account feature
 - MSN-style nudging!
