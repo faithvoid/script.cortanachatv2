@@ -337,6 +337,54 @@ def create_post_invite(session):
         except requests.exceptions.RequestException as e:
             xbmcgui.Dialog().ok('Cortana Chat', 'Failed to post beacon: {}'.format(str(e)))
 
+def search_for_beacon(session, game_title=None):
+    """Search for game invite beacons on Bluesky."""
+    if not game_title:
+        keyboard = xbmc.Keyboard('', 'Enter the game title to search for')
+        keyboard.doModal()
+        if not keyboard.isConfirmed():
+            return
+        game_title = keyboard.getText().strip()
+    
+    if not game_title:
+        xbmcgui.Dialog().ok("Error", "No game title entered.")
+        return
+    
+    url = BASE_URL + "app.bsky.feed.searchPosts"
+    headers = {'Authorization': 'Bearer ' + session['accessJwt']}
+    params = {'q': "would like to play '{}' (Xbox)".format(game_title)}
+    
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        posts = response.json().get("posts", [])
+        
+        if not posts:
+            xbmcgui.Dialog().ok("No Results", "No beacons found for '{}'.".format(game_title))
+            return
+        
+        items = [u"{}: {}".format(p["author"].get("handle", "Unknown"), p["record"].get("text", "No content")) for p in posts]
+        choice = xbmcgui.Dialog().select("Beacon Search Results", items)
+        
+        if choice >= 0:
+            selected_post = posts[choice]
+            author_handle = selected_post["author"].get("handle", "Unknown")
+            post_text = selected_post["record"].get("text", "No content")
+            
+            match = re.match(r"(.*) would like to play '(.*)'", post_text)
+            if match:
+                game_title = match.group(2)
+                if game_title in load_games():
+                    join_choice = xbmcgui.Dialog().yesno("Game Invite", "{} has invited you to play '{}'. Join?".format(author_handle, game_title))
+                    if join_choice:
+                        launch_game(game_title)
+                else:
+                    xbmcgui.Dialog().ok("Game Not Found", "{} is not installed.".format(game_title))
+            else:
+                xbmcgui.Dialog().ok(author_handle, post_text)
+    except requests.exceptions.RequestException as e:
+        xbmcgui.Dialog().ok("Error", "Failed to search beacons: " + str(e))
+
 # Function to upload files
 def upload_file(base_url, access_token, filename, img_bytes):
     suffix = filename.split(".")[-1].lower()
@@ -664,7 +712,7 @@ def display_home_feed(session):
     cursor = None
     while True:
         feed, next_cursor = fetch_home_feed(session, cursor)
-        items = ["Post", "Post Media", "Set Beacon"]
+        items = ["Post", "Post Media", "Set Beacon", "Search for Beacon"]
         items += [post['post']['author'].get('handle', 'Unknown') + ': ' + post['post']['record'].get('text', 'No content') 
                   for post in feed if 'post' in post and 'author' in post['post'] and 'record' in post['post']]
 
@@ -682,6 +730,8 @@ def display_home_feed(session):
             create_post_media(session)
         elif choice == 2:
             create_post_invite(session)
+        elif choice == 3:
+            search_for_beacon(session)
         elif next_cursor and choice == len(items) - 1:
             cursor = next_cursor
         else:
