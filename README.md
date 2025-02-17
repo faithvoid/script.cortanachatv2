@@ -22,7 +22,8 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 - (Optional) You can use "login.py" in the scripts folder to add/change your login information on any profile!
 - Edit "default.py" and modify "TIMEZONE_OFFSET = -5" to your local timezone relative to UTC (-5 is EST) for accurate timestamps
 - Copy the Cortana Chat folder to Q:/scripts, but copy your login.txt to your user profile (usually under Q:/UserData/profiles/). You can do this for all the profiles on your system to give them all individual social features!
-- (Optional) if using a non-Bluesky AT protocol site, you'll have to modify the BASE_URL and CHAT_URL in default.py to point at that site! Support outside of Bluesky is entirely unsupported, but testing & contributing is encouraged!
+- (Optional) If using beacons, make sure to go into the Settings menu and select "Install Game" or "Install Games (Bulk)" in order to populate your games list with games to invite players to! You can rename games indiviudally after scanning in bulk via "Edit Games" if needed!
+- (Optional) If using a non-Bluesky AT protocol site, you'll have to modify the BASE_URL and CHAT_URL in default.py & notifier.py to point at that site! Support outside of Bluesky is entirely unsupported, but testing & contributing is encouraged!
 - Run the add-on and enjoy!
 
 ## Working
