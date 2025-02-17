@@ -27,22 +27,21 @@ A functional, decentralized and easy to use instant messenger, right on your Xbo
 
 ## Working
 - Sending / receiving messages
-- Following/unfollowing/blocking/unblocking users (both manually and via Followers/Following/Mutuals/Blocked menus)
 - Receiving chat/notification toast pop-ups by selecting "Enable Notifications" in settings
-- Inviting other users to games (and accepting invites from other users) via messages and the home feed.
+- Following/unfollowing/blocking/unblocking users (both manually and via Followers/Following/Mutuals/Blocked menus)
+- Inviting other users to games (and accepting invites from other users) via messages and the home feed (via a 360-style Beacon system!)
 - Viewng & posting to your home feed
-- Viewing following/followers sections
-- Multi-user logins via XBMC's account feature
-- MSN-style nudging!
+- Viewing following/followers/mutuals sections
+- Multi-user logins via XBMC's built-in account feature (each user has their files stored in their own profile directory!)
+- MSN-style nudging (once every 30 seconds by default!)
 
 ## Not Working
-- TBA
+- Liking / Unliking / Sharing / Unsharing posts (possibly not necessary for the scope of Cortana Chat, will definitely implement in xSky though)
 
 ## Bugs
 - You need to disable notifications (if enabled) before launching a game, or your Xbox may crash! The script currently terminates properly when running a game through the invite system, but needs to be terminated via "Disable Notifications" in the Settings menu to exit cleanly.
 
 ## TODO:
-- Add / Unfriend / Block functions
-- Show only "mutual" followers under "Friends"?
 - Maybe feed interactions? But also that's more of what xSky is for
 - Add timestamps to messages
+- Add enable/disable nudging option to settings
