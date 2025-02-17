@@ -1,4 +1,4 @@
-# Cortana Chat (Script Edition) - Bluesky / AT Protocol based instant messaging client for XBMC4Xbox
+# Cortana Chat v2.0 - Bluesky / AT Protocol based instant messaging client for XBMC4Xbox
 
 A functional, decentralized and easy to use instant messenger, right on your Xbox.
 
