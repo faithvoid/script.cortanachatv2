@@ -10,7 +10,7 @@ SCRIPT_NAME = 'Cortana Chat'
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # Get the script's directory
 BASE_URL = 'https://bsky.social/xrpc/'
 CHAT_URL = 'https://api.bsky.chat/xrpc/'
-CHECK_INTERVAL = 5  # Interval in seconds to check for new messages and notifications
+CHECK_INTERVAL = 1  # Interval in seconds to check for new messages and notifications - Currently set to 1 due to timing hack below to stop the script from crashing when launching games (see end of main function to adjust real check_interval frequency).
 LOGIN_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/login.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 MESSAGES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/messages.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
 HANDLES_FILE = xbmc.translatePath('special://home/userdata/profiles/{}/handles.txt'.format(xbmc.getInfoLabel('System.ProfileName')))
@@ -270,3 +270,4 @@ def main():
 # Run the main function
 if __name__ == '__main__':
     main()
+    time.sleep(5) # This is the real check_interval value, modify this if you want to increase/decrease notification frequency! Currently defaults to 5 seconds.
